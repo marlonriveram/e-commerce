@@ -8,6 +8,7 @@ import com.example.e_commerce.claim.domain.model.Claim;
 import com.example.e_commerce.claim.domain.model.ClaimHistory;
 import com.example.e_commerce.claim.domain.repository.ClaimHistoryRepository;
 import com.example.e_commerce.claim.domain.repository.ClaimRepository;
+import com.example.e_commerce.shared.event.ClaimStatusChangedEvent;
 import com.example.e_commerce.user.domain.enums.EnumRole;
 import com.example.e_commerce.user.domain.exception.UserNotFoundException;
 import com.example.e_commerce.user.domain.model.User;
@@ -18,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 
@@ -33,6 +35,8 @@ class ClaimReviewServiceTest {
     private ClaimHistoryRepository claimHistoryRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ClaimReviewService service;
@@ -61,6 +65,8 @@ class ClaimReviewServiceTest {
         assertEquals(EnumStatus.IN_REVIEW, result.getStatus());
         verify(claimRepository).save(any());
         verify(claimHistoryRepository).save(any());
+        // Verifica que se publicó el evento de cambio de estado al Application Context
+        verify(eventPublisher).publishEvent(any(ClaimStatusChangedEvent.class));
     }
 
     @Test

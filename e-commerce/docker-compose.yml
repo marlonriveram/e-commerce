@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # ── PostgreSQL ──
   db:
     image: postgres:16
     container_name: container_db
@@ -14,5 +15,33 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # ── RabbitMQ (US-01: broker de mensajería) ──
+  # rabbitmq:3.13-management incluye la Management UI (panel web)
+  # para visualizar colas, exchanges, mensajes, etc.
+  #
+  # PUERTOS:
+  #   5672  → AMQP (puerto estándar para comunicación con la app)
+  #   15672 → Management UI (panel web para administrar RabbitMQ)
+  #
+  # CREDENCIALES:
+  #   guest/guest son las credenciales por defecto de RabbitMQ.
+  #   Para producción se deben cambiar.
+  #
+  # VOLUMEN:
+  #   rabbitmq_data persiste las colas y mensajes incluso si el contenedor se reinicia.
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: container_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
 volumes:
   postgres_data:
+  rabbitmq_data:

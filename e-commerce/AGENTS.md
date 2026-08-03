@@ -7,9 +7,10 @@ Hexagonal (DDD) — **modular por dominio** bajo `com.example.e_commerce`:
 ```
 com.example.e_commerce/
 ├── ECommerceApplication.java
-├── shared/                  ← cross-cutting (errores, config, security futuro)
+├── shared/                  ← cross-cutting (eventos, errores, infraestructura)
+│   ├── event/               ClaimStatusChangedEvent, ClaimEventPublisher (publicador RabbitMQ)
 │   ├── exception/           ApiError, GlobalExceptionHandler
-│   └── config/              (vacío, para JWT/Security futuro)
+│   └── config/              RabbitMQConfig (colas/exchange/DLQ), RabbitMQJsonConfig (serialización JSON)
 ├── claim/                   ← módulo Claim (dominio auto-contenido)
 │   ├── domain/              model, enums, exceptions, repository (interfaces), validator
 │   ├── application/         DTOs, mappers, services
@@ -49,7 +50,51 @@ docker compose up -d                              # inicia PostgreSQL 16
 
 - Context path: `/api/v1` (configurado en `application.yaml`)
 - Archivo `.env` carga credenciales BD via `spring-dotenv`
-- `spring.jpa.hibernate.ddl-auto=update` — esquema auto-administrado (sin Flyway/Liquibase)
+- **Flyway controla el esquema y los datos** (`spring.jpa.hibernate.ddl-auto=validate`): las entidades se validan contra el esquema, NO lo crean ni modifican
+
+## Migraciones y Datos de Prueba (Flyway)
+
+Flyway es el estándar de migraciones: scripts SQL **versionados** que se ejecutan **una sola vez** (rastreados en `flyway_schema_history`).
+
+**Ubicación:** `src/main/resources/db/migration/`
+
+```
+db/migration/
+├── V1__create_tables.sql   # esquema: users, claims, claim_history
+├── V2__seed_data.sql       # datos de prueba (usuarios, claims, historial)
+└── V3__...sql              # siguiente cambio (cuando agregues una entidad)
+```
+
+**Reglas:**
+- `ddl-auto` está en `validate` — NUNCA volver a `update`. Si cambias una entidad JPA, crea una migración nueva (`V3__...sql`)
+- Los datos de prueba (seed) van en migraciones versionadas, NO en Postman a mano
+- El seed actual incluye roles SUPPORT y FINANCE (que la API no puede crear) y claims en TODOS los estados (`PENDING`, `IN_REVIEW`, `APPROVED`, `REJECTED`, `REFUNDED`) con su historial
+- Al insertar ids explícitos en el seed, resetea las secuencias con `setval()` al final para que la app siga generando ids nuevos sin conflictos
+- Para resetear todo desde cero: `docker compose down -v && docker compose up -d` (borra volúmenes)
+
+## Eventos Asíncronos (US-01 — RabbitMQ)
+
+Flujo: cambio de estado de claim → `ClaimStatusChangedEvent` → RabbitMQ.
+
+```
+PATCH /claims/{id}/review|refund
+  → ClaimReviewService/ClaimRefundService (@Transactional)
+  → eventPublisher.publishEvent(ClaimStatusChangedEvent)  ← se difiere
+  → COMMIT exitoso → ClaimEventPublisher (@EventListener)
+  → rabbitTemplate.convertAndSend() → claim.exchange → claim.status.queue
+```
+
+**Garantía clave:** el evento se publica **solo tras el COMMIT**. Si hay rollback, el evento nunca llega a RabbitMQ (Spring difiere la entrega hasta que la transacción termina).
+
+**Componentes:**
+- `shared/event/ClaimStatusChangedEvent.java` — payload `{claimId, userId, previousStatus, newStatus, timestamp}`
+- `shared/event/ClaimEventPublisher.java` — `@EventListener` + `RabbitTemplate`
+- `shared/config/RabbitMQConfig.java` — exchange directo `claim.exchange`, cola `claim.status.queue`, Dead Letter (`claim.dlx`/`claim.dlq`)
+- `shared/config/RabbitMQJsonConfig.java` — serializa mensajes como JSON (**Jackson 3 / `JacksonJsonMessageConverter`**; NO usar `Jackson2JsonMessageConverter` que es de Jackson 2 y no está en el classpath de Spring Boot 4)
+
+**Broker local:** RabbitMQ corre en Docker (Management UI: http://localhost:15672, guest/guest). Las colas/exchanges se crean perezosamente al abrirse la primera conexión (primer evento publicado).
+
+**Pendiente US-02:** consumidor (`@RabbitListener`) del evento para enviar notificaciones — NO implementado aún.
 
 ## Máquina de Estados del Claim
 
@@ -110,6 +155,8 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [x] Validación de transiciones de estado (`ClaimValidator`)
 - [x] Validación de roles (`ClaimValidator`)
 - [x] Trazabilidad (`ClaimHistory`) en cada cambio de estado
+- [x] **US-01**: publicación asíncrona de eventos en RabbitMQ (`ClaimStatusChangedEvent`, `@EventListener` + `RabbitTemplate`, solo tras COMMIT)
+- [x] **Flyway**: migraciones versionadas + seed de datos de prueba (`ddl-auto=validate`)
 
 ## Pendiente
 
@@ -118,6 +165,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [ ] Tests de integración (requieren DB)
 - [ ] Dockerfile productivo (actualmente vacío)
 - [ ] Agregar `@NotNull` en `ClaimRequest.orderId`
+- [ ] **US-02**: consumidor (`@RabbitListener`) de eventos para enviar notificaciones al cliente (email/push) con reintentos
 
 ## 🧪 Estándar de Pruebas Unitarias (Spring Boot)
 Cuando te pida crear pruebas unitarias, debes seguir estas reglas simples:

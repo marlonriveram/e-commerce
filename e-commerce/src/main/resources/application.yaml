@@ -14,9 +14,22 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      # Flyway ahora controla el esquema (db/migration). Hibernate solo VALIDA
+      # que las entidades coincidan con el esquema, ya no lo crea ni lo modifica.
+      # "update" ya NO se usa: si cambias una entidad, debes crear V3__...sql.
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+
+  # ── Configuración de RabbitMQ ──
+  # Spring Boot Autoconfiguration detecta esta sección y crea automáticamente
+  # un RabbitTemplate y un CachingConnectionFactory conectados a este broker.
+  # Estos valores deben coincidir con los del servicio en docker-compose.yml.
+  rabbitmq:
+    host: localhost      # dirección del broker (localhost porque Docker expone el puerto)
+    port: 5672           # puerto AMQP estándar (NO confundir con 15672 que es la Management UI)
+    username: guest      # credenciales por defecto de RabbitMQ
+    password: guest
