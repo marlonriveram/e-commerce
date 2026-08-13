@@ -33,3 +33,16 @@ spring:
     port: 5672           # puerto AMQP estándar (NO confundir con 15672 que es la Management UI)
     username: guest      # credenciales por defecto de RabbitMQ
     password: guest
+
+  # ── Spring AI (Groq) ──
+  # Groq expone una API compatible con OpenAI: Spring AI la integra reutilizando
+  # el cliente OpenAI, apuntando el base-url a api.groq.com/openai/v1.
+  # La API key NUNCA se escribe aquí: se referencia desde el .env (spring-dotenv)
+  # y queda excluida del control de versiones (ver .gitignore).
+  ai:
+    openai:
+      api-key: ${GROQ_API_KEY}
+      base-url: https://api.groq.com/openai/v1
+      chat:
+        model: llama-3.3-70b-versatile
+        temperature: 0.7

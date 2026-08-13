@@ -24,6 +24,11 @@ com.example.e_commerce/
 └── notification/            ← módulo Notification (sin entidad ni web)
     ├── domain/              NotificationService (interfaz)
     └── infrastructure/      LogNotificationService (mock), ClaimStatusChangedConsumer (@RabbitListener)
+└── ai/                      ← módulo AI (Spring AI + Groq)
+    ├── domain/              AiService (interfaz)
+    ├── application/         AiChatService, DTOs (AiChatRequest/AiChatResponse)
+    ├── infrastructure/      GroqAiService (implementación con ChatClient)
+    └── web/                 AiChatController
 ```
 
 | Capa | Rol | Dependencias permitidas |
@@ -157,6 +162,15 @@ Todos bajo `/api/v1`:
 | `PATCH` | `/claims/{claimId}/review` | `ClaimReviewService` | Restringido a SUPPORT |
 | `PATCH` | `/claims/{claimId}/refund` | `ClaimRefundService` | Restringido a FINANCE |
 | `PATCH` | `/claims/{claimId}/cancel` | `ClaimCancellationService` | Solo dueño del claim + estado PENDING |
+
+## IA (Spring AI + Groq)
+
+Groq se integra **reutilizando el cliente OpenAI** de Spring AI (no existe starter propio de Groq): `spring-ai-starter-model-openai` + `base-url` apuntando a `https://api.groq.com/openai/v1`. La API key vive en `.env` (`GROQ_API_KEY`) y se referencia en `application.yaml` via `${GROQ_API_KEY}` — nunca se escribe en el yaml ni en código.
+
+- **Dependencia:** `spring-ai-starter-model-openai`, versión gestionada por el BOM `spring-ai-bom` (2.0.x = compatible con Spring Boot 4.x)
+- **Endpoint:** `POST /api/v1/ai/chat` con `{ "message": "..." }` → `{ "message": "<respuesta>" }`
+- **Capas:** `ai/domain/AiService` (interfaz pura) → `ai/infrastructure/GroqAiService` (impl con `ChatClient`) → `ai/application/AiChatService` (DTOs) → `ai/web/AiChatController`
+- **Pendiente:** poner la API key real en `.env` antes de probar; el modelo actual es `llama-3.3-70b-versatile`
 
 ## Manejo de Errores
 
