@@ -5,5 +5,6 @@ public enum EnumStatus {
     IN_REVIEW,
     APPROVED,
     REJECTED,
-    REFUNDED
+    REFUNDED,
+    CANCELLED
 }

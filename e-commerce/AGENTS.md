@@ -125,9 +125,11 @@ claim.status.queue → ClaimStatusChangedConsumer (@RabbitListener)
 ```
 PENDING → IN_REVIEW → APPROVED → REFUNDED
                    ↘ REJECTED ←─────↗
+PENDING → CANCELLED (solo el dueño del claim, endpoint /cancel)
 ```
 - Transiciones validadas por `ClaimValidator.validateStatusTransition()` (static `EnumMap`)
-- `REJECTED` y `REFUNDED` son estados terminales
+- `CANCELLED`, `REJECTED` y `REFUNDED` son estados terminales
+- Cancelación validada por `ClaimValidator.validateClaimCanBeCancelled()` (solo desde `PENDING`) y `ClaimValidator.validateUserIsClaimOwner()` (solo el dueño)
 
 ## Permisos por Rol
 
@@ -154,6 +156,7 @@ Todos bajo `/api/v1`:
 | `GET` | `/claims/{claimId}/history` | `GetAuditHistoryService` | Historial de cambios del claim |
 | `PATCH` | `/claims/{claimId}/review` | `ClaimReviewService` | Restringido a SUPPORT |
 | `PATCH` | `/claims/{claimId}/refund` | `ClaimRefundService` | Restringido a FINANCE |
+| `PATCH` | `/claims/{claimId}/cancel` | `ClaimCancellationService` | Solo dueño del claim + estado PENDING |
 
 ## Manejo de Errores
 
@@ -165,6 +168,8 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 | `UserNotFoundException` | 404 |
 | `InvalidStatusTransitionException` | 400 |
 | `InvalidRoleForTransitionException` | 403 |
+| `InvalidCancellationException` | 400 (claim no está en PENDING para cancelar) |
+| `NotClaimOwnerException` | 403 (solo el dueño puede cancelar) |
 | `DuplicateEmailException` | 409 |
 | `MethodArgumentNotValidException` | 400 (con subErrors por campo) |
 | `DataIntegrityViolationException` | 409 |
@@ -181,6 +186,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [x] Trazabilidad (`ClaimHistory`) en cada cambio de estado
 - [x] **US-01**: publicación asíncrona de eventos en RabbitMQ (`ClaimStatusChangedEvent`, `@EventListener` + `RabbitTemplate`, solo tras COMMIT)
 - [x] **US-02**: consumidor (`@RabbitListener`) de eventos para notificar al cliente (implementación mock `LogNotificationService`)
+- [x] **US-03**: cancelación de claims (`PATCH /claims/{id}/cancel`), estado `CANCELLED`, validaciones de estado y dueño, evento publicado
 - [x] **Flyway**: migraciones versionadas + seed de datos de prueba (`ddl-auto=validate`)
 
 ## Pendiente
@@ -191,6 +197,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [ ] Dockerfile productivo (actualmente vacío)
 - [ ] Agregar `@NotNull` en `ClaimRequest.orderId`
 - [ ] **US-02 email real**: reemplazar `LogNotificationService` por `EmailNotificationService` (JavaMailSender + SMTP + `spring-boot-starter-mail`)
+- [ ] Tests unitarios de US-03 (`ClaimCancellationServiceTest`, endpoint `/cancel` en `ClaimControllerTest`, handlers en `GlobalExceptionHandlerTest`)
 
 ## 🧪 Estándar de Pruebas Unitarias (Spring Boot)
 Cuando te pida crear pruebas unitarias, debes seguir estas reglas simples:

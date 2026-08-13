@@ -1,8 +1,10 @@
 package com.example.e_commerce.shared.exception;
 
 import com.example.e_commerce.claim.domain.exception.ClaimNotFoundException;
+import com.example.e_commerce.claim.domain.exception.InvalidCancellationException;
 import com.example.e_commerce.claim.domain.exception.InvalidRoleForTransitionException;
 import com.example.e_commerce.claim.domain.exception.InvalidStatusTransitionException;
+import com.example.e_commerce.claim.domain.exception.NotClaimOwnerException;
 import com.example.e_commerce.user.domain.exception.DuplicateEmailException;
 import com.example.e_commerce.user.domain.exception.UserNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -62,6 +64,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidRoleForTransitionException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ResponseEntity<ApiError> handleInvalidRole(InvalidRoleForTransitionException ex, HttpServletRequest request) {
+        ApiError error = new ApiError(
+                ex.getMessage(),
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                request.getRequestURI(),
+                null
+        );
+        return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(InvalidCancellationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ResponseEntity<ApiError> handleInvalidCancellation(InvalidCancellationException ex, HttpServletRequest request) {
+        ApiError error = new ApiError(
+                ex.getMessage(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                request.getRequestURI(),
+                null
+        );
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(NotClaimOwnerException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ResponseEntity<ApiError> handleNotClaimOwner(NotClaimOwnerException ex, HttpServletRequest request) {
         ApiError error = new ApiError(
                 ex.getMessage(),
                 HttpStatus.FORBIDDEN.value(),

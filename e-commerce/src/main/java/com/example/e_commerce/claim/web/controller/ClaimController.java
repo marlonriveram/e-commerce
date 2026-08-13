@@ -1,5 +1,6 @@
 package com.example.e_commerce.claim.web.controller;
 
+import com.example.e_commerce.claim.application.dto.request.CancelRequest;
 import com.example.e_commerce.claim.application.dto.request.ClaimRequest;
 import com.example.e_commerce.claim.application.dto.request.RefundRequest;
 import com.example.e_commerce.claim.application.dto.request.StatusUpdateRequest;
@@ -7,6 +8,7 @@ import com.example.e_commerce.claim.application.dto.response.ClaimHistoryRespons
 import com.example.e_commerce.claim.application.dto.response.ClaimResponse;
 import com.example.e_commerce.claim.application.mapper.ClaimHistoryMapper;
 import com.example.e_commerce.claim.application.mapper.ClaimMapper;
+import com.example.e_commerce.claim.application.service.ClaimCancellationService;
 import com.example.e_commerce.claim.application.service.ClaimCreationService;
 import com.example.e_commerce.claim.application.service.ClaimRefundService;
 import com.example.e_commerce.claim.application.service.ClaimReviewService;
@@ -38,6 +40,7 @@ public class ClaimController {
     private final ClaimCreationService claimCreationService;
     private final ClaimReviewService claimReviewService;
     private final ClaimRefundService claimRefundService;
+    private final ClaimCancellationService claimCancellationService;
     private final GetAllClaimsService getAllClaimsService;
     private final GetCustomerClaimsService getCustomerClaimsService;
     private final GetAuditHistoryService getAuditHistoryService;
@@ -95,6 +98,14 @@ public class ClaimController {
             @PathVariable Long claimId,
             @RequestBody @Valid RefundRequest request) {
         Claim claim = claimRefundService.refundClaim(claimId, request.getChangedByUser());
+        return ResponseEntity.ok(ClaimMapper.toResponse(claim));
+    }
+
+    @PatchMapping("/{claimId}/cancel")
+    public ResponseEntity<ClaimResponse> cancel(
+            @PathVariable Long claimId,
+            @RequestBody @Valid CancelRequest request) {
+        Claim claim = claimCancellationService.cancelClaim(claimId, request.getChangedByUser());
         return ResponseEntity.ok(ClaimMapper.toResponse(claim));
     }
 }
