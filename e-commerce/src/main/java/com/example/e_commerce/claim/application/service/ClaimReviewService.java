@@ -90,10 +90,11 @@ public class ClaimReviewService {
         // a los @EventListener SOLO después de que esta transacción haga COMMIT.
         // Si hay excepción y la transacción se revierte, este evento se descarta.
         eventPublisher.publishEvent(new ClaimStatusChangedEvent(
-                updated.getId(),        // ID del claim que cambió
-                changedByUser,          // quién hizo el cambio
-                previousStatus,         // estado anterior
-                newStatus,              // nuevo estado
+                updated.getId(),           // ID del claim que cambió
+                updated.getUserId(),       // ID del CLIENTE dueño del claim (a quien notificar)
+                changedByUser,             // quién hizo el cambio (agente SUPPORT)
+                previousStatus,            // estado anterior
+                newStatus,                 // nuevo estado
                 java.time.LocalDateTime.now() // momento del cambio
         ));
 

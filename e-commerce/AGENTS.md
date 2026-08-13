@@ -16,11 +16,14 @@ com.example.e_commerce/
 │   ├── application/         DTOs, mappers, services
 │   ├── infrastructure/      entities JPA, JPA repos, repository impls
 │   └── web/                 controller
-└── user/                    ← módulo User (dominio auto-contenido)
-    ├── domain/              model, enums, exceptions, repository (interface)
-    ├── application/         DTOs, mapper, service
-    ├── infrastructure/      entity JPA, JPA repo, repository impl
-    └── web/                 controller
+├── user/                    ← módulo User (dominio auto-contenido)
+│   ├── domain/              model, enums, exceptions, repository (interface)
+│   ├── application/         DTOs, mapper, service
+│   ├── infrastructure/      entity JPA, JPA repo, repository impl
+│   └── web/                 controller
+└── notification/            ← módulo Notification (sin entidad ni web)
+    ├── domain/              NotificationService (interfaz)
+    └── infrastructure/      LogNotificationService (mock), ClaimStatusChangedConsumer (@RabbitListener)
 ```
 
 | Capa | Rol | Dependencias permitidas |
@@ -87,14 +90,35 @@ PATCH /claims/{id}/review|refund
 **Garantía clave:** el evento se publica **solo tras el COMMIT**. Si hay rollback, el evento nunca llega a RabbitMQ (Spring difiere la entrega hasta que la transacción termina).
 
 **Componentes:**
-- `shared/event/ClaimStatusChangedEvent.java` — payload `{claimId, userId, previousStatus, newStatus, timestamp}`
+- `shared/event/ClaimStatusChangedEvent.java` — payload `{claimId, customerUserId, changedByUser, previousStatus, newStatus, timestamp}` (`customerUserId` = cliente dueño del claim; `changedByUser` = agente que hizo el cambio)
 - `shared/event/ClaimEventPublisher.java` — `@EventListener` + `RabbitTemplate`
 - `shared/config/RabbitMQConfig.java` — exchange directo `claim.exchange`, cola `claim.status.queue`, Dead Letter (`claim.dlx`/`claim.dlq`)
 - `shared/config/RabbitMQJsonConfig.java` — serializa mensajes como JSON (**Jackson 3 / `JacksonJsonMessageConverter`**; NO usar `Jackson2JsonMessageConverter` que es de Jackson 2 y no está en el classpath de Spring Boot 4)
 
 **Broker local:** RabbitMQ corre en Docker (Management UI: http://localhost:15672, guest/guest). Las colas/exchanges se crean perezosamente al abrirse la primera conexión (primer evento publicado).
 
-**Pendiente US-02:** consumidor (`@RabbitListener`) del evento para enviar notificaciones — NO implementado aún.
+## Notificaciones (US-02 — RabbitMQ)
+
+Flujo: el consumidor lee el evento de la cola y notifica al cliente del claim.
+
+```
+claim.status.queue → ClaimStatusChangedConsumer (@RabbitListener)
+  → UserRepository.findById(event.getCustomerUserId())  → user.getEmail()
+  → NotificationService.sendClaimStatusNotification(email, event)
+```
+
+**Componentes:**
+- `notification/domain/NotificationService.java` — interfaz `sendClaimStatusNotification(String recipientEmail, ClaimStatusChangedEvent event)`
+- `notification/infrastructure/LogNotificationService.java` — implementación **MOCK**: solo `log.info`. Se reemplazará por `EmailNotificationService` (JavaMailSender + SMTP) implementando la misma interfaz, **sin tocar el consumidor**
+- `notification/infrastructure/ClaimStatusChangedConsumer.java` — `@RabbitListener(queues = RabbitMQConfig.CLAIM_STATUS_QUEUE)`
+
+**Reglas de comportamiento:**
+- El evento lleva `customerUserId` (dueño del claim, incluido por el productor gratis) y `changedByUser` (agente que hizo el cambio). El email del cliente se resuelve en el consumidor — **no** se consulta el claim (1 sola consulta a BD)
+- Si el usuario **ya no existe**: `log.warn` y se consume el mensaje igual (cola limpia, NO se llena la DLQ a propósito)
+- Si el listener lanza una excepción: RabbitMQ reintenta y cae al DLQ (`claim.dlq`) tras agotar reintentos
+- `@RabbitListener` funciona automáticamente con `spring-boot-starter-amqp` (no hace falta `@EnableRabbit`)
+
+**Pendiente:** reemplazar `LogNotificationService` por `EmailNotificationService` usando `JavaMailSender` (requiere `spring-boot-starter-mail` + SMTP en `application.yaml`, ej. Mailtrap en desarrollo).
 
 ## Máquina de Estados del Claim
 
@@ -156,6 +180,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [x] Validación de roles (`ClaimValidator`)
 - [x] Trazabilidad (`ClaimHistory`) en cada cambio de estado
 - [x] **US-01**: publicación asíncrona de eventos en RabbitMQ (`ClaimStatusChangedEvent`, `@EventListener` + `RabbitTemplate`, solo tras COMMIT)
+- [x] **US-02**: consumidor (`@RabbitListener`) de eventos para notificar al cliente (implementación mock `LogNotificationService`)
 - [x] **Flyway**: migraciones versionadas + seed de datos de prueba (`ddl-auto=validate`)
 
 ## Pendiente
@@ -165,7 +190,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [ ] Tests de integración (requieren DB)
 - [ ] Dockerfile productivo (actualmente vacío)
 - [ ] Agregar `@NotNull` en `ClaimRequest.orderId`
-- [ ] **US-02**: consumidor (`@RabbitListener`) de eventos para enviar notificaciones al cliente (email/push) con reintentos
+- [ ] **US-02 email real**: reemplazar `LogNotificationService` por `EmailNotificationService` (JavaMailSender + SMTP + `spring-boot-starter-mail`)
 
 ## 🧪 Estándar de Pruebas Unitarias (Spring Boot)
 Cuando te pida crear pruebas unitarias, debes seguir estas reglas simples:

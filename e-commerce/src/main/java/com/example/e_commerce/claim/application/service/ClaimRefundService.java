@@ -70,11 +70,12 @@ public class ClaimRefundService {
 
         // Publica el evento
         eventPublisher.publishEvent(new ClaimStatusChangedEvent(
-                updated.getId(),
-                changedByUser,
-                previousStatus,
-                EnumStatus.REFUNDED,
-                java.time.LocalDateTime.now()
+                updated.getId(),           // ID del claim que cambió
+                updated.getUserId(),       // ID del CLIENTE dueño del claim (a quien notificar)
+                changedByUser,             // quién hizo el cambio (agente FINANCE)
+                previousStatus,            // estado anterior
+                EnumStatus.REFUNDED,       // nuevo estado
+                java.time.LocalDateTime.now() // momento del cambio
         ));
 
         return updated;
