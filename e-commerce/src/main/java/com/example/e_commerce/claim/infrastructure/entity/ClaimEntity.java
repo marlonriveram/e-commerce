@@ -44,6 +44,15 @@ public class ClaimEntity {
     @Column(nullable = false, length = 20)
     private EnumStatus status;
 
+    @Column(length = 50)
+    private String category;
+
+    @Column(length = 20)
+    private String urgency;
+
+    @Column(length = 500)
+    private String summary;
+
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
