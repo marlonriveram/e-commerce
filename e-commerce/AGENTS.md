@@ -24,11 +24,11 @@ com.example.e_commerce/
 └── notification/            ← módulo Notification (sin entidad ni web)
     ├── domain/              NotificationService (interfaz)
     └── infrastructure/      LogNotificationService (mock), ClaimStatusChangedConsumer (@RabbitListener)
-└── ai/                      ← módulo AI (Spring AI + Groq)
-    ├── domain/              AiService (interfaz)
-    ├── application/         AiChatService, DTOs (AiChatRequest/AiChatResponse)
-    ├── infrastructure/      GroqAiService (implementación con ChatClient)
-    └── web/                 AiChatController
+└── ai/                      ← módulo AI (Spring AI + Groq): cada capacidad IA es un sub-paquete auto-contenido
+    └── claimclassifier/     ← US-AI-02: categorización/urgencia/resumen de claims
+        ├── domain/          model/ClaimAiMetadata (record), repository/ClaimClassifier (interfaz)
+        ├── application/     service/ClaimCategorizationService
+        └── infrastructure/  GroqClaimClassifier (impl con ChatClient), ClaimAiConsumer (@RabbitListener)
 ```
 
 | Capa | Rol | Dependencias permitidas |
@@ -57,7 +57,7 @@ docker compose up -d                              # inicia PostgreSQL 16
 ```
 
 - Context path: `/api/v1` (configurado en `application.yaml`)
-- Archivo `.env` carga credenciales BD via `spring-dotenv`
+- Variables de entorno (`.env`) se cargan como variables de entorno del sistema via `setx` (Spring Boot 4 eliminó compatibilidad de `spring-dotenv`). La API key de Groq (`GROQ_API_KEY`) se resuelve en `application.yaml` via `${GROQ_API_KEY}`
 - **Flyway controla el esquema y los datos** (`spring.jpa.hibernate.ddl-auto=validate`): las entidades se validan contra el esquema, NO lo crean ni modifican
 
 ## Migraciones y Datos de Prueba (Flyway)
@@ -165,12 +165,44 @@ Todos bajo `/api/v1`:
 
 ## IA (Spring AI + Groq)
 
-Groq se integra **reutilizando el cliente OpenAI** de Spring AI (no existe starter propio de Groq): `spring-ai-starter-model-openai` + `base-url` apuntando a `https://api.groq.com/openai/v1`. La API key vive en `.env` (`GROQ_API_KEY`) y se referencia en `application.yaml` via `${GROQ_API_KEY}` — nunca se escribe en el yaml ni en código.
+Groq se integra **reutilizando el cliente OpenAI** de Spring AI (no existe starter propio de Groq): `spring-ai-starter-model-openai` + `base-url` apuntando a `https://api.groq.com/openai/v1`. La API key se almacena en `.env` y se exporta como variable de entorno del sistema (`setx GROQ_API_KEY`); se resuelve en `application.yaml` via `${GROQ_API_KEY}` — nunca se escribe en el yaml ni en código.
 
 - **Dependencia:** `spring-ai-starter-model-openai`, versión gestionada por el BOM `spring-ai-bom` (2.0.x = compatible con Spring Boot 4.x)
-- **Endpoint:** `POST /api/v1/ai/chat` con `{ "message": "..." }` → `{ "message": "<respuesta>" }`
-- **Capas:** `ai/domain/AiService` (interfaz pura) → `ai/infrastructure/GroqAiService` (impl con `ChatClient`) → `ai/application/AiChatService` (DTOs) → `ai/web/AiChatController`
-- **Pendiente:** poner la API key real en `.env` antes de probar; el modelo actual es `llama-3.3-70b-versatile`
+- **Estructura:** el módulo `ai/` agrupa TODAS las capacidades IA; cada una es un sub-paquete auto-contenido (`claimclassifier/`, futuras: `chat/`, `recommendation/`, ...). La infra compartida (wrapper de ChatClient, conversores) irá en `ai/shared/` cuando exista más de una capacidad.
+- **API de Spring AI 2.0 (ojo con los cambios vs 1.x):** `PromptTemplate` se construye con solo el template y se renderiza con `.create(Map)` (NO existe el constructor `(String, Map)`); structured output via `StructuredOutputConverter` + `BeanOutputConverter`, consumido con `chatClient.prompt(prompt).call().entity(converter)`.
+- **Modelo:** `openai/gpt-oss-120b` (verificado vía curl — la cuenta Groq NO tiene modelos Llama disponibles)
+- **Variable de entorno:** `GROQ_API_KEY` definida via `setx GROQ_API_KEY` (variable de entorno del sistema). `spring-dotenv` 4.0.0 NO funciona con Spring Boot 4.x (usaba `spring.factories` que fue eliminado en Boot 4)
+
+## Categorización IA de Claims (US-AI-02)
+
+Flujo: creación de claim → `ClaimCreatedEvent` → RabbitMQ → módulo `ai/claimclassifier` → Groq → update del claim.
+
+```
+POST /claims
+  → ClaimCreationService (@Transactional) → save en BD
+  → publishEvent(ClaimCreatedEvent)  ← se difiere
+  → COMMIT → ClaimEventPublisher.onClaimCreated (@EventListener)
+  → claim.exchange → claim.ai.queue
+  → ClaimAiConsumer (@RabbitListener)
+  → ClaimCategorizationService.categorize(claimId, description)
+  → GroqClaimClassifier (ChatClient + PromptTemplate + StructuredOutputConverter) → ClaimAiMetadata
+  → claim.setCategory/urgency/summary → ClaimRepository.save
+```
+
+**Componentes:**
+- `shared/event/ClaimCreatedEvent.java` — payload `{claimId, userId, orderId, description, timestamp}`
+- `shared/config/RabbitMQConfig.java` — cola `claim.ai.queue` + routing key `claim.created` (mismo exchange `claim.exchange`, misma DLQ)
+- `ai/claimclassifier/domain/model/ClaimAiMetadata.java` — **record** `{category, urgency, summary}` (value object inmutable de salida de la IA)
+- `ai/claimclassifier/domain/repository/ClaimClassifier.java` — port: `ClaimAiMetadata classify(String description)`
+- `ai/claimclassifier/infrastructure/GroqClaimClassifier.java` — impl con `ChatClient` + `PromptTemplate` + `StructuredOutputConverter`
+- `ai/claimclassifier/application/service/ClaimCategorizationService.java` — orquesta: claim → classify → set → save
+- `ai/claimclassifier/infrastructure/ClaimAiConsumer.java` — `@RabbitListener(queues = RabbitMQConfig.CLAIM_AI_QUEUE)`
+
+**Reglas de comportamiento:**
+- Los campos `category`, `urgency`, `summary` son **NULLABLE** (V4) y se rellenan de forma **asíncrona** tras la creación; la API los expone en `ClaimResponse`
+- Si el claim **ya no existe**: `log.warn` y se consume el mensaje igual (cola limpia, NO se llena la DLQ a propósito — espejo de US-02)
+- Si la IA falla (Groq, conversión): excepción → reintentos → DLQ (`claim.dlq`)
+- Urgencia generada como texto libre entre `LOW|MEDIUM|HIGH|CRITICAL`; categoría texto libre (ej: `PAYMENT`, `SHIPPING`)
 
 ## Manejo de Errores
 
@@ -201,6 +233,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [x] **US-01**: publicación asíncrona de eventos en RabbitMQ (`ClaimStatusChangedEvent`, `@EventListener` + `RabbitTemplate`, solo tras COMMIT)
 - [x] **US-02**: consumidor (`@RabbitListener`) de eventos para notificar al cliente (implementación mock `LogNotificationService`)
 - [x] **US-03**: cancelación de claims (`PATCH /claims/{id}/cancel`), estado `CANCELLED`, validaciones de estado y dueño, evento publicado
+- [x] **US-AI-02**: categorización IA de claims (`ClaimCreatedEvent` → `claim.ai.queue` → `ai/claimclassifier` → Groq → campos `category`/`urgency`/`summary` en `claims`)
 - [x] **Flyway**: migraciones versionadas + seed de datos de prueba (`ddl-auto=validate`)
 
 ## Pendiente
@@ -212,6 +245,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [ ] Agregar `@NotNull` en `ClaimRequest.orderId`
 - [ ] **US-02 email real**: reemplazar `LogNotificationService` por `EmailNotificationService` (JavaMailSender + SMTP + `spring-boot-starter-mail`)
 - [ ] Tests unitarios de US-03 (`ClaimCancellationServiceTest`, endpoint `/cancel` en `ClaimControllerTest`, handlers en `GlobalExceptionHandlerTest`)
+- [ ] Tests unitarios de US-AI-02 (`ClaimCategorizationServiceTest`)
 
 ## 🧪 Estándar de Pruebas Unitarias (Spring Boot)
 Cuando te pida crear pruebas unitarias, debes seguir estas reglas simples:

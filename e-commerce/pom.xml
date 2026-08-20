@@ -95,11 +95,6 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>me.paulschwarz</groupId>
-			<artifactId>spring-dotenv</artifactId>
-			<version>4.0.0</version>
-		</dependency>
 
 		<!-- Spring AI: cliente de chat. Groq se integra REUTILIZANDO el cliente OpenAI
 		     (no existe starter propio de Groq). El base-url se apunta a api.groq.com.

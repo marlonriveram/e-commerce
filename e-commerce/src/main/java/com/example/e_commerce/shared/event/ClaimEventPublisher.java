@@ -84,4 +84,21 @@ public class ClaimEventPublisher {
 
         log.info("Evento publicado exitosamente: claimId={}", event.getClaimId());
     }
+
+    /**
+     * Publica el ClaimCreatedEvent hacia la cola claim.ai.queue.
+     * Lo consume el módulo ai/ para categorizar el reclamo (US-AI-02).
+     */
+    @EventListener
+    public void onClaimCreated(ClaimCreatedEvent event) {
+        log.info("Publicando evento de creación en RabbitMQ: claimId={}", event.getClaimId());
+
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.CLAIM_EXCHANGE,
+                RabbitMQConfig.CLAIM_AI_ROUTING_KEY,
+                event
+        );
+
+        log.info("Evento de creación publicado exitosamente: claimId={}", event.getClaimId());
+    }
 }

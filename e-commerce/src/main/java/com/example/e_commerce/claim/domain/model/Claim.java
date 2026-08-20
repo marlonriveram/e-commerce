@@ -20,6 +20,9 @@ public class Claim {
     private Long orderId;
     private String description;
     private EnumStatus status;
+    private String category;
+    private String urgency;
+    private String summary;
     private Long userId;
     private LocalDateTime createdAt;
 }
