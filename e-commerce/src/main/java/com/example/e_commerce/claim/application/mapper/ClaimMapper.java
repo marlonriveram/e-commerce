@@ -3,7 +3,6 @@ package com.example.e_commerce.claim.application.mapper;
 import com.example.e_commerce.claim.application.dto.response.ClaimResponse;
 import com.example.e_commerce.claim.domain.model.Claim;
 import com.example.e_commerce.claim.infrastructure.entity.ClaimEntity;
-import com.example.e_commerce.user.infrastructure.entity.UserEntity;
 
 public class ClaimMapper {
 
@@ -14,7 +13,9 @@ public class ClaimMapper {
                 .orderId(domain.getOrderId())
                 .description(domain.getDescription())
                 .status(domain.getStatus())
-                .user(UserEntity.builder().id(domain.getUserId()).build())
+                .category(domain.getCategory())
+                .urgency(domain.getUrgency())
+                .summary(domain.getSummary())
                 .createdAt(domain.getCreatedAt())
                 .build();
     }
@@ -26,6 +27,9 @@ public class ClaimMapper {
                 .orderId(entity.getOrderId())
                 .description(entity.getDescription())
                 .status(entity.getStatus())
+                .category(entity.getCategory())
+                .urgency(entity.getUrgency())
+                .summary(entity.getSummary())
                 .userId(entity.getUser().getId())
                 .createdAt(entity.getCreatedAt())
                 .build();
@@ -38,6 +42,9 @@ public class ClaimMapper {
                 .orderId(domain.getOrderId())
                 .description(domain.getDescription())
                 .status(domain.getStatus())
+                .category(domain.getCategory())
+                .urgency(domain.getUrgency())
+                .summary(domain.getSummary())
                 .userId(domain.getUserId())
                 .createdAt(domain.getCreatedAt())
                 .build();

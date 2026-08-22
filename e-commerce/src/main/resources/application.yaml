@@ -37,12 +37,12 @@ spring:
   # ── Spring AI (Groq) ──
   # Groq expone una API compatible con OpenAI: Spring AI la integra reutilizando
   # el cliente OpenAI, apuntando el base-url a api.groq.com/openai/v1.
-  # La API key NUNCA se escribe aquí: se referencia desde el .env (spring-dotenv)
-  # y queda excluida del control de versiones (ver .gitignore).
+  # La API key se resuelve desde la variable de entorno del sistema ${GROQ_API_KEY}
+  # (definida via `setx GROQ_API_KEY`, almacenada en .env excluido del repo).
   ai:
     openai:
       api-key: ${GROQ_API_KEY}
       base-url: https://api.groq.com/openai/v1
       chat:
-        model: llama-3.3-70b-versatile
+        model: openai/gpt-oss-120b
         temperature: 0.7

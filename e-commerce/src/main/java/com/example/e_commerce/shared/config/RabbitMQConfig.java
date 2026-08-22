@@ -44,6 +44,12 @@ public class RabbitMQConfig {
     /** Routing key: la "dirección" que identifica de almacenamiento (UBICACION DEL BUZON) */
     public static final String CLAIM_STATUS_ROUTING_KEY = "claim.status.changed";
 
+    /** Nombre de la cola de creación de claims: la consumen los módulos de IA */
+    public static final String CLAIM_AI_QUEUE = "claim.ai.queue";
+
+    /** Routing key del evento de creación de claims */
+    public static final String CLAIM_AI_ROUTING_KEY = "claim.created";
+
     /** Nombre del exchange de Dead Letter (respaldo para mensajes fallidos) */
     public static final String DEAD_LETTER_EXCHANGE = "claim.dlx";
 
@@ -91,6 +97,30 @@ public class RabbitMQConfig {
                 .bind(claimStatusQueue)       // cola destino
                 .to(claimExchange)            // exchange origen
                 .with(CLAIM_STATUS_ROUTING_KEY); // routing key
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // COLA DE CREACIÓN DE CLAIMS (consumida por el módulo ai/)
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * Cola durable para eventos de creación de claims (claim.created).
+     * El módulo ai/ (US-AI-02) la escucha para categorizar el reclamo.
+     * Con DLQ: si el análisis IA falla tras los reintentos, cae a claim.dlq.
+     */
+    @Bean
+    public Queue claimAiQueue() {
+        return QueueBuilder.durable(CLAIM_AI_QUEUE)
+                .withArgument("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE)
+                .build();
+    }
+
+    @Bean
+    public Binding claimAiBinding(Queue claimAiQueue, DirectExchange claimExchange) {
+        return BindingBuilder
+                .bind(claimAiQueue)
+                .to(claimExchange)
+                .with(CLAIM_AI_ROUTING_KEY);
     }
 
     // ──────────────────────────────────────────────────────────────
