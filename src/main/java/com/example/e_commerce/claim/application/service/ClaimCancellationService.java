@@ -3,8 +3,6 @@ package com.example.e_commerce.claim.application.service;
 import com.example.e_commerce.claim.domain.enums.EnumStatus;
 import com.example.e_commerce.claim.domain.exception.ClaimNotFoundException;
 import com.example.e_commerce.claim.domain.model.Claim;
-import com.example.e_commerce.claim.domain.model.ClaimHistory;
-import com.example.e_commerce.claim.domain.repository.ClaimHistoryRepository;
 import com.example.e_commerce.claim.domain.repository.ClaimRepository;
 import com.example.e_commerce.claim.domain.validator.ClaimValidator;
 import com.example.e_commerce.shared.event.ClaimStatusChangedEvent;
@@ -43,7 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ClaimCancellationService {
 
     private final ClaimRepository claimRepository;
-    private final ClaimHistoryRepository claimHistoryRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -76,7 +73,7 @@ public class ClaimCancellationService {
 
         EnumStatus previousStatus = claim.getStatus();
 
-        Claim updated = updateStatusToCancelled(claim, changedByUser);
+        Claim updated = updateStatusToCancelled(claim);
 
         log.info("Claim {} cancelado por el usuario {}", claimId, changedByUser);
 
@@ -92,19 +89,9 @@ public class ClaimCancellationService {
         return updated;
     }
 
-    private Claim updateStatusToCancelled(Claim claim, Long changedByUser) {
-        EnumStatus previousStatus = claim.getStatus();
+    private Claim updateStatusToCancelled(Claim claim) {
         claim.setStatus(EnumStatus.CANCELLED);
         claimRepository.save(claim);
-
-        ClaimHistory history = ClaimHistory.builder()
-                .claimId(claim.getId())
-                .previousStatus(previousStatus)
-                .newStatus(EnumStatus.CANCELLED)
-                .changedByUser(changedByUser)
-                .build();
-        claimHistoryRepository.save(history);
-
         return claim;
     }
 }

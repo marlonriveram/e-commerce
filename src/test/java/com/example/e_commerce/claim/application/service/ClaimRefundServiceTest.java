@@ -5,8 +5,6 @@ import com.example.e_commerce.claim.domain.exception.ClaimNotFoundException;
 import com.example.e_commerce.claim.domain.exception.InvalidRoleForTransitionException;
 import com.example.e_commerce.claim.domain.exception.InvalidStatusTransitionException;
 import com.example.e_commerce.claim.domain.model.Claim;
-import com.example.e_commerce.claim.domain.model.ClaimHistory;
-import com.example.e_commerce.claim.domain.repository.ClaimHistoryRepository;
 import com.example.e_commerce.claim.domain.repository.ClaimRepository;
 import com.example.e_commerce.shared.event.ClaimStatusChangedEvent;
 import com.example.e_commerce.user.domain.enums.EnumRole;
@@ -32,8 +30,6 @@ class ClaimRefundServiceTest {
     @Mock
     private ClaimRepository claimRepository;
     @Mock
-    private ClaimHistoryRepository claimHistoryRepository;
-    @Mock
     private UserRepository userRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -57,7 +53,6 @@ class ClaimRefundServiceTest {
 
 
         when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(claimHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // When
         Claim result = service.refundClaim(1L, 5L);
@@ -65,30 +60,28 @@ class ClaimRefundServiceTest {
         // Then
         assertEquals(EnumStatus.REFUNDED, result.getStatus());
         verify(claimRepository).save(any());
-        verify(claimHistoryRepository).save(any());
-        // Verifica que se publicó el evento de cambio de estado al Application Context
         verify(eventPublisher).publishEvent(any(ClaimStatusChangedEvent.class));
     }
 
     @Test
-    void shouldSaveCorrectHistoryRecord() {
+    void shouldPublishEvent_WhenRefundSucceeds() {
         // Given
         when(claimRepository.findById(1L)).thenReturn(Optional.of(approvedClaim()));
         when(userRepository.findById(5L)).thenReturn(Optional.of(financeUser()));
         when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ArgumentCaptor<ClaimHistory> captor = ArgumentCaptor.forClass(ClaimHistory.class);
-        when(claimHistoryRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
-
         // When
         service.refundClaim(1L, 5L);
 
         // Then
-        ClaimHistory history = captor.getValue();
-        assertEquals(1L, history.getClaimId());
-        assertEquals(EnumStatus.APPROVED, history.getPreviousStatus());
-        assertEquals(EnumStatus.REFUNDED, history.getNewStatus());
-        assertEquals(5L, history.getChangedByUser());
+        ArgumentCaptor<ClaimStatusChangedEvent> captor = ArgumentCaptor.forClass(ClaimStatusChangedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        ClaimStatusChangedEvent event = captor.getValue();
+        assertEquals(1L, event.getClaimId());
+        assertEquals(EnumStatus.APPROVED, event.getPreviousStatus());
+        assertEquals(EnumStatus.REFUNDED, event.getNewStatus());
+        assertEquals(5L, event.getChangedByUser());
     }
 
     @Test

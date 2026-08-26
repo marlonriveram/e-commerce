@@ -1,9 +1,11 @@
 package com.example.e_commerce.claim.web.controller;
 
 import com.example.e_commerce.claim.application.dto.request.ClaimRequest;
+import com.example.e_commerce.claim.application.dto.request.CancelRequest;
 import com.example.e_commerce.claim.application.dto.request.RefundRequest;
 import com.example.e_commerce.claim.application.dto.request.StatusUpdateRequest;
 import com.example.e_commerce.claim.application.dto.response.ClaimResponse;
+import com.example.e_commerce.claim.application.service.ClaimCancellationService;
 import com.example.e_commerce.claim.application.service.ClaimCreationService;
 import com.example.e_commerce.claim.application.service.ClaimRefundService;
 import com.example.e_commerce.claim.application.service.ClaimReviewService;
@@ -39,6 +41,8 @@ class ClaimControllerTest {
     private ClaimReviewService claimReviewService;
     @Mock
     private ClaimRefundService claimRefundService;
+    @Mock
+    private ClaimCancellationService claimCancellationService;
     @Mock
     private GetAllClaimsService getAllClaimsService;
     @Mock
@@ -146,5 +150,17 @@ class ClaimControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(EnumStatus.REFUNDED, ((ClaimResponse) response.getBody()).getStatus());
+    }
+
+    @Test
+    void shouldCancelClaim() {
+        CancelRequest request = new CancelRequest(10L);
+        when(claimCancellationService.cancelClaim(1L, 10L))
+                .thenReturn(sampleClaim(1L, EnumStatus.CANCELLED));
+
+        ResponseEntity<?> response = controller.cancel(1L, request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(EnumStatus.CANCELLED, ((ClaimResponse) response.getBody()).getStatus());
     }
 }

@@ -3,8 +3,6 @@ package com.example.e_commerce.claim.application.service;
 import com.example.e_commerce.claim.domain.enums.EnumStatus;
 import com.example.e_commerce.claim.domain.exception.ClaimNotFoundException;
 import com.example.e_commerce.claim.domain.model.Claim;
-import com.example.e_commerce.claim.domain.model.ClaimHistory;
-import com.example.e_commerce.claim.domain.repository.ClaimHistoryRepository;
 import com.example.e_commerce.claim.domain.repository.ClaimRepository;
 import com.example.e_commerce.claim.domain.validator.ClaimValidator;
 import com.example.e_commerce.shared.event.ClaimStatusChangedEvent;
@@ -39,7 +37,6 @@ import org.springframework.stereotype.Service;
 public class ClaimReviewService {
 
     private final ClaimRepository claimRepository;
-    private final ClaimHistoryRepository claimHistoryRepository;
     private final UserRepository userRepository;
 
     /** ApplicationEventPublisher: puerta de salida de Spring Application Events.
@@ -82,8 +79,8 @@ public class ClaimReviewService {
         // Capturamos el estado anterior ANTES de cambiarlo (lo necesitamos para el evento)
         EnumStatus previousStatus = claim.getStatus();
 
-        // Persiste el cambio en BD + crea registro de auditoría
-        Claim updated = updateStatus(claim, newStatus, changedByUser);
+        // Persiste el cambio de estado en BD
+        Claim updated = updateStatus(claim, newStatus);
 
         // Publica el evento al Application Context de Spring.
         // NO va directo a RabbitMQ — Spring lo guarda internamente y lo entrega
@@ -101,19 +98,9 @@ public class ClaimReviewService {
         return updated;
     }
 
-    private Claim updateStatus(Claim claim, EnumStatus newStatus, Long changedByUser) {
-        EnumStatus previousStatus = claim.getStatus();
+    private Claim updateStatus(Claim claim, EnumStatus newStatus) {
         claim.setStatus(newStatus);
         claimRepository.save(claim);
-
-        ClaimHistory history = ClaimHistory.builder()
-                .claimId(claim.getId())
-                .previousStatus(previousStatus)
-                .newStatus(newStatus)
-                .changedByUser(changedByUser)
-                .build();
-        claimHistoryRepository.save(history);
-
         return claim;
     }
 }

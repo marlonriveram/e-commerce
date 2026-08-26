@@ -2,8 +2,10 @@ package com.example.e_commerce.shared.exception;
 
 import com.example.e_commerce.claim.domain.enums.EnumStatus;
 import com.example.e_commerce.claim.domain.exception.ClaimNotFoundException;
+import com.example.e_commerce.claim.domain.exception.InvalidCancellationException;
 import com.example.e_commerce.claim.domain.exception.InvalidRoleForTransitionException;
 import com.example.e_commerce.claim.domain.exception.InvalidStatusTransitionException;
+import com.example.e_commerce.claim.domain.exception.NotClaimOwnerException;
 import com.example.e_commerce.user.domain.enums.EnumRole;
 import com.example.e_commerce.user.domain.exception.DuplicateEmailException;
 import com.example.e_commerce.user.domain.exception.UserNotFoundException;
@@ -120,5 +122,25 @@ class GlobalExceptionHandlerTest {
                 new ClaimNotFoundException(1L), request);
 
         assertNull(response.getBody().getSubErrors());
+    }
+
+    @Test
+    void shouldReturn400_WhenInvalidCancellation() {
+        ResponseEntity<ApiError> response = handler.handleInvalidCancellation(
+                new InvalidCancellationException(EnumStatus.IN_REVIEW), request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(400, response.getBody().getStatus());
+        assertTrue(response.getBody().getMessage().contains("IN_REVIEW"));
+    }
+
+    @Test
+    void shouldReturn403_WhenNotClaimOwner() {
+        ResponseEntity<ApiError> response = handler.handleNotClaimOwner(
+                new NotClaimOwnerException(20L, 1L), request);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals(403, response.getBody().getStatus());
+        assertTrue(response.getBody().getMessage().contains("20"));
     }
 }

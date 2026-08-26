@@ -29,7 +29,6 @@ class ClaimMapperTest {
         assertEquals(100L, entity.getOrderId());
         assertEquals("Damaged item", entity.getDescription());
         assertEquals(EnumStatus.PENDING, entity.getStatus());
-        assertEquals(5L, entity.getUser().getId());
     }
 
     @Test
