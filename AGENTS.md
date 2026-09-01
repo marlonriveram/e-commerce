@@ -23,7 +23,7 @@ com.example.e_commerce/
 │   └── web/                 controller
 └── notification/            ← módulo Notification (sin entidad ni web)
     ├── domain/              NotificationService (interfaz)
-    └── infrastructure/      LogNotificationService (mock), ClaimStatusChangedConsumer (@RabbitListener)
+    └── infrastructure/      EmailNotificationService (JavaMailSender + SMTP), ClaimStatusChangedConsumer (@RabbitListener)
 └── ai/                      ← módulo AI (Spring AI + Groq): cada capacidad IA es un sub-paquete auto-contenido
     └── claimclassifier/     ← US-AI-02: categorización/urgencia/resumen de claims
         ├── domain/          model/ClaimAiMetadata (record), repository/ClaimClassifier (interfaz)
@@ -114,7 +114,7 @@ claim.status.queue → ClaimStatusChangedConsumer (@RabbitListener)
 
 **Componentes:**
 - `notification/domain/NotificationService.java` — interfaz `sendClaimStatusNotification(String recipientEmail, ClaimStatusChangedEvent event)`
-- `notification/infrastructure/LogNotificationService.java` — implementación **MOCK**: solo `log.info`. Se reemplazará por `EmailNotificationService` (JavaMailSender + SMTP) implementando la misma interfaz, **sin tocar el consumidor**
+- `notification/infrastructure/EmailNotificationService.java` — implementación real con `JavaMailSender` + SMTP (Mailtrap en desarrollo). Construye un `MimeMessage` HTML con asunto, cuerpo y los datos del cambio de estado del claim. Implementa la misma interfaz — `ClaimStatusChangedConsumer` no cambia
 - `notification/infrastructure/ClaimStatusChangedConsumer.java` — `@RabbitListener(queues = RabbitMQConfig.CLAIM_STATUS_QUEUE)`
 
 **Reglas de comportamiento:**
@@ -122,8 +122,6 @@ claim.status.queue → ClaimStatusChangedConsumer (@RabbitListener)
 - Si el usuario **ya no existe**: `log.warn` y se consume el mensaje igual (cola limpia, NO se llena la DLQ a propósito)
 - Si el listener lanza una excepción: RabbitMQ reintenta y cae al DLQ (`claim.dlq`) tras agotar reintentos
 - `@RabbitListener` funciona automáticamente con `spring-boot-starter-amqp` (no hace falta `@EnableRabbit`)
-
-**Pendiente:** reemplazar `LogNotificationService` por `EmailNotificationService` usando `JavaMailSender` (requiere `spring-boot-starter-mail` + SMTP en `application.yaml`, ej. Mailtrap en desarrollo).
 
 ## Máquina de Estados del Claim
 
@@ -168,7 +166,7 @@ Todos bajo `/api/v1`:
 Groq se integra **reutilizando el cliente OpenAI** de Spring AI (no existe starter propio de Groq): `spring-ai-starter-model-openai` + `base-url` apuntando a `https://api.groq.com/openai/v1`. La API key se almacena en `.env` y se exporta como variable de entorno del sistema (`setx GROQ_API_KEY`); se resuelve en `application.yaml` via `${GROQ_API_KEY}` — nunca se escribe en el yaml ni en código.
 
 - **Dependencia:** `spring-ai-starter-model-openai`, versión gestionada por el BOM `spring-ai-bom` (2.0.x = compatible con Spring Boot 4.x)
-- **Estructura:** el módulo `ai/` agrupa TODAS las capacidades IA; cada una es un sub-paquete auto-contenido (`claimclassifier/`, futuras: `chat/`, `recommendation/`, ...). La infra compartida (wrapper de ChatClient, conversores) irá en `ai/shared/` cuando exista más de una capacidad.
+- **Estructura:** el módulo `ai/` agrupa TODAS las capacidades IA; cada una es un sub-paquete auto-contenido (`claimclassifier/`, futuras: `chat/`, `recommendation/`, ...). **PENDIENTE:** la infra compartida (wrapper de ChatClient, conversores) irá en `ai/shared/` cuando exista más de una capacidad. Hoy `GroqClaimClassifierImp` construye su propio `ChatClient` con `ChatClient.Builder` — cuando haya que centralizarlo, crear un `ChatClientFactory` en `ai/shared/` y que las capacidades lo inyecten.
 - **API de Spring AI 2.0 (ojo con los cambios vs 1.x):** `PromptTemplate` se construye con solo el template y se renderiza con `.create(Map)` (NO existe el constructor `(String, Map)`); structured output via `StructuredOutputConverter` + `BeanOutputConverter`, consumido con `chatClient.prompt(prompt).call().entity(converter)`.
 - **Modelo:** `openai/gpt-oss-120b` (verificado vía curl — la cuenta Groq NO tiene modelos Llama disponibles)
 - **Variable de entorno:** `GROQ_API_KEY` definida via `setx GROQ_API_KEY` (variable de entorno del sistema). `spring-dotenv` 4.0.0 NO funciona con Spring Boot 4.x (usaba `spring.factories` que fue eliminado en Boot 4)
@@ -217,6 +215,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 | `InvalidCancellationException` | 400 (claim no está en PENDING para cancelar) |
 | `NotClaimOwnerException` | 403 (solo el dueño puede cancelar) |
 | `DuplicateEmailException` | 409 |
+| `EmailNotificationException` | 500 (fallo al enviar email SMTP; se lanza desde `EmailNotificationService`) |
 | `MethodArgumentNotValidException` | 400 (con subErrors por campo) |
 | `DataIntegrityViolationException` | 409 |
 | `Exception` (catch-all) | 500 |
@@ -231,7 +230,7 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [x] Validación de roles (`ClaimValidator`)
 - [x] Trazabilidad (`ClaimHistory`) en cada cambio de estado
 - [x] **US-01**: publicación asíncrona de eventos en RabbitMQ (`ClaimStatusChangedEvent`, `@EventListener` + `RabbitTemplate`, solo tras COMMIT)
-- [x] **US-02**: consumidor (`@RabbitListener`) de eventos para notificar al cliente (implementación mock `LogNotificationService`)
+- [x] **US-02**: consumidor (`@RabbitListener`) de eventos para notificar al cliente (implementación real `EmailNotificationService` con JavaMailSender + SMTP)
 - [x] **US-03**: cancelación de claims (`PATCH /claims/{id}/cancel`), estado `CANCELLED`, validaciones de estado y dueño, evento publicado
 - [x] **US-AI-02**: categorización IA de claims (`ClaimCreatedEvent` → `claim.ai.queue` → `ai/claimclassifier` → Groq → campos `category`/`urgency`/`summary` en `claims`)
 - [x] **Flyway**: migraciones versionadas + seed de datos de prueba (`ddl-auto=validate`)
@@ -243,9 +242,9 @@ Centralizado via `GlobalExceptionHandler` (`@RestControllerAdvice`) que retorna 
 - [ ] Tests de integración (requieren DB)
 - [ ] Dockerfile productivo (actualmente vacío)
 - [ ] Agregar `@NotNull` en `ClaimRequest.orderId`
-- [ ] **US-02 email real**: reemplazar `LogNotificationService` por `EmailNotificationService` (JavaMailSender + SMTP + `spring-boot-starter-mail`)
 - [ ] Tests unitarios de US-03 (`ClaimCancellationServiceTest`, endpoint `/cancel` en `ClaimControllerTest`, handlers en `GlobalExceptionHandlerTest`)
 - [ ] Tests unitarios de US-AI-02 (`ClaimCategorizationServiceTest`)
+- [ ] Extraer infra IA compartida a `ai/shared/` (un `ChatClientFactory` que centralice el `ChatClient` para que las futuras capacidades IA no lo construyan cada una) — ver sección "IA (Spring AI + Groq)"
 
 ## 🧪 Estándar de Pruebas Unitarias (Spring Boot)
 Cuando te pida crear pruebas unitarias, debes seguir estas reglas simples:

@@ -34,6 +34,25 @@ spring:
     username: guest      # credenciales por defecto de RabbitMQ
     password: guest
 
+  # ── Spring Mail (SMTP — Mailtrap en desarrollo) ──
+  # JavaMailSender usa estas credenciales para enviar correos.
+  # Se resuelven desde variables de entorno del sistema (definidas via setx):
+  #   setx MAIL_HOST "sandbox.smtp.mailtrap.io"
+  #   setx MAIL_PORT "2525"
+  #   setx MAIL_USERNAME "tu_usuario"
+  #   setx MAIL_PASSWORD "tu_password"
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
   # ── Spring AI (Groq) ──
   # Groq expone una API compatible con OpenAI: Spring AI la integra reutilizando
   # el cliente OpenAI, apuntando el base-url a api.groq.com/openai/v1.
