@@ -5,6 +5,7 @@ import com.example.e_commerce.claim.domain.exception.InvalidCancellationExceptio
 import com.example.e_commerce.claim.domain.exception.InvalidRoleForTransitionException;
 import com.example.e_commerce.claim.domain.exception.InvalidStatusTransitionException;
 import com.example.e_commerce.claim.domain.exception.NotClaimOwnerException;
+import com.example.e_commerce.notification.domain.exception.EmailNotificationException;
 import com.example.e_commerce.user.domain.exception.DuplicateEmailException;
 import com.example.e_commerce.user.domain.exception.UserNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -130,6 +131,7 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    //Nativa
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<ApiError> handleMalformedJson(HttpMessageNotReadableException ex, HttpServletRequest request) {
@@ -143,6 +145,7 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    //Nativa
     @ExceptionHandler(DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ResponseEntity<ApiError> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
@@ -156,6 +159,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(EmailNotificationException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ResponseEntity<ApiError> handleEmailNotification(EmailNotificationException ex, HttpServletRequest request) {
+        ApiError error = new ApiError(
+                ex.getMessage(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
+                request.getRequestURI(),
+                null
+        );
+        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    //Nativa
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<ApiError> handleGeneral(Exception ex, HttpServletRequest request) {

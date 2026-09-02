@@ -96,12 +96,12 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Spring AI: cliente de chat. Groq se integra REUTILIZANDO el cliente OpenAI
-		     (no existe starter propio de Groq). El base-url se apunta a api.groq.com.
-		     La API key viene del .env via ${GROQ_API_KEY}. -->
+		<!-- Spring Mail: JavaMailSender + autoconfiguración SMTP.
+		     Las credenciales se resuelven desde variables de entorno del sistema
+		     (MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD) definidas via setx. -->
 		<dependency>
-			<groupId>org.springframework.ai</groupId>
-			<artifactId>spring-ai-starter-model-openai</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
 		<!-- Spring AI: cliente de chat. Groq se integra REUTILIZANDO el cliente OpenAI

@@ -5,8 +5,6 @@ import com.example.e_commerce.claim.domain.exception.ClaimNotFoundException;
 import com.example.e_commerce.claim.domain.exception.InvalidRoleForTransitionException;
 import com.example.e_commerce.claim.domain.exception.InvalidStatusTransitionException;
 import com.example.e_commerce.claim.domain.model.Claim;
-import com.example.e_commerce.claim.domain.model.ClaimHistory;
-import com.example.e_commerce.claim.domain.repository.ClaimHistoryRepository;
 import com.example.e_commerce.claim.domain.repository.ClaimRepository;
 import com.example.e_commerce.shared.event.ClaimStatusChangedEvent;
 import com.example.e_commerce.user.domain.enums.EnumRole;
@@ -15,7 +13,6 @@ import com.example.e_commerce.user.domain.model.User;
 import com.example.e_commerce.user.domain.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -31,8 +28,6 @@ class ClaimReviewServiceTest {
 
     @Mock
     private ClaimRepository claimRepository;
-    @Mock
-    private ClaimHistoryRepository claimHistoryRepository;
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -56,7 +51,6 @@ class ClaimReviewServiceTest {
         when(claimRepository.findById(1L)).thenReturn(Optional.of(pendingClaim()));
         when(userRepository.findById(2L)).thenReturn(Optional.of(supportUser()));
         when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(claimHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // When
         Claim result = service.reviewClaim(1L, EnumStatus.IN_REVIEW, 2L);
@@ -64,29 +58,8 @@ class ClaimReviewServiceTest {
         // Then
         assertEquals(EnumStatus.IN_REVIEW, result.getStatus());
         verify(claimRepository).save(any());
-        verify(claimHistoryRepository).save(any());
         // Verifica que se publicó el evento de cambio de estado al Application Context
         verify(eventPublisher).publishEvent(any(ClaimStatusChangedEvent.class));
-    }
-
-    @Test
-    void shouldSaveCorrectHistoryRecord() {
-        // Given
-        when(claimRepository.findById(1L)).thenReturn(Optional.of(pendingClaim()));
-        when(userRepository.findById(2L)).thenReturn(Optional.of(supportUser()));
-        when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        ArgumentCaptor<ClaimHistory> captor = ArgumentCaptor.forClass(ClaimHistory.class);
-        when(claimHistoryRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
-
-        // When
-        service.reviewClaim(1L, EnumStatus.IN_REVIEW, 2L);
-
-        // Then
-        ClaimHistory history = captor.getValue();
-        assertEquals(1L, history.getClaimId());
-        assertEquals(EnumStatus.PENDING, history.getPreviousStatus());
-        assertEquals(EnumStatus.IN_REVIEW, history.getNewStatus());
-        assertEquals(2L, history.getChangedByUser());
     }
 
     @Test
