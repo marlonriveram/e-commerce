@@ -9,7 +9,7 @@
 ## 2. Cambios propuestos
 
 - `docker-compose.yml`: cambiar la imagen del servicio `db` de `postgres:16` a `pgvector/pgvector:pg16`. La imagen oficial `postgres:16` **NO incluye la extensión `vector`**; `pgvector/pgvector:pg16` es el mismo PostgreSQL 16 con la extensión compilada. Mismos puertos, credenciales y volumen `postgres_data` (los datos se conservan).
-- `pom.xml`: agregar `spring-ai-starter-pgvector-store` (versión gestionada por el BOM `spring-ai-bom` 2.0.0 ya presente en el proyecto).
+- `pom.xml`: agregar **`spring-ai-starter-vector-store-pgvector`** (versión gestionada por el BOM `spring-ai-bom` 2.0.0 ya presente en el proyecto). ⚠️ En Spring AI 2.0 el starter se renombró: el nombre de 1.x `spring-ai-starter-pgvector-store` **no está en el BOM 2.0** (verificado al compilar).
 - Migración Flyway **`V5__enable_pgvector.sql`**: `CREATE EXTENSION IF NOT EXISTS vector;` (idempotente). El único rol de Flyway es habilitar la extensión; la tabla la gestiona Spring AI (ver "Reglas de comportamiento").
 - `application.yaml`: bloque `spring.ai.vectorstore.pgvector.*`.
 
@@ -48,7 +48,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 ## 5. Criterios de aceptación
 
 - [ ] `CREATE EXTENSION IF NOT EXISTS vector;` presente en `V5__enable_pgvector.sql` y ejecutada una sola vez (registrada en `flyway_schema_history`).
-- [ ] `spring-ai-starter-pgvector-store` agregado en `pom.xml` (sin versión, gestionado por BOM).
+- [ ] `spring-ai-starter-vector-store-pgvector` agregado en `pom.xml` (sin versión, gestionado por BOM).
 - [ ] Propiedades `spring.ai.vectorstore.pgvector` configuradas en `application.yaml` (con `dimensions` placeholder documentado).
 - [ ] `docker compose up -d` levanta PostgreSQL 16 con la extensión disponible y **conserva los datos existentes** del volumen `postgres_data`.
 - [ ] La aplicación arranca sin errores (`./mvnw spring-boot:run`).

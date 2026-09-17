@@ -2,8 +2,11 @@ version: '3.8'
 
 services:
   # ── PostgreSQL ──
+  # pgvector/pgvector:pg16 = PostgreSQL 16 con la extensión `vector` compilada
+  # (la imagen oficial postgres:16 NO la incluye). Mismo volumen postgres_data:
+  # al recrear el contenedor, los datos existentes se conservan.
   db:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: container_db
     restart: unless-stopped
     environment:

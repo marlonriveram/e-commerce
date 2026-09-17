@@ -65,3 +65,19 @@ spring:
       chat:
         model: openai/gpt-oss-120b
         temperature: 0.7
+
+    # ── Spring AI VectorStore pgvector (US-RAG-01) ──
+    # Persistencia y búsqueda de embeddings en PostgreSQL (extensión `vector`,
+    # habilitada por Flyway V5). La tabla `vector_store` la crea Spring AI en el
+    # arranque (initialize-schema=true) con índice HNSW y distancia coseno.
+    # IMPORTANTE: `dimensions` es un placeholder hasta US-RAG-02 (allí se resuelve
+    # el embedding model de Groq vía curl y se fija la dimensión real del vector).
+    vectorstore:
+      pgvector:
+        initialize-schema: true   # Spring AI crea la tabla + índice HNSW al arrancar
+        schema-name: public
+        table-name: vector_store
+        dimensions: ${VECTOR_DIMENSIONS:1024}   # PENDIENTE: resolver en US-RAG-02
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        batching-strategy: partitioned
