@@ -111,6 +111,16 @@
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-model-openai</artifactId>
 		</dependency>
+
+		<!-- Spring AI VectorStore pgvector (US-RAG-01): persistencia y búsqueda de
+		     embeddings en PostgreSQL. Gestiona la tabla vector_store (initialize-schema)
+		     con índice HNSW. Versión gestionada por el BOM spring-ai-bom.
+		     NOTA: en Spring AI 2.0 el starter se renombró a spring-ai-starter-vector-store-pgvector
+		     (el nombre 1.x spring-ai-starter-pgvector-store no está en el BOM 2.0). -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>
